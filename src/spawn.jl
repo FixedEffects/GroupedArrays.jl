@@ -30,13 +30,18 @@ function _spawn_for_chunks_helper(iter, lbody, basesize)
             nt = Threads.nthreads()
             len = length(x)
             if nt > 1 && len > basesize
-                tasks = [@spawn begin
-                             for i in p
-                                 local $(esc(lidx)) = @inbounds x[i]
-                                 $(esc(lbody))
-                             end
-                         end
-                         for p in split_indices(len, basesize)]
+                # a loop rather than a comprehension: collecting the generator compiles
+                # abstractly typed Base code that packages adding array methods
+                # (e.g. CategoricalArrays) invalidate
+                tasks = Task[]
+                for p in split_indices(len, basesize)
+                    push!(tasks, @spawn begin
+                        for i in p
+                            local $(esc(lidx)) = @inbounds x[i]
+                            $(esc(lbody))
+                        end
+                    end)
+                end
                 foreach(wait, tasks)
             else
                 for i in eachindex(x)

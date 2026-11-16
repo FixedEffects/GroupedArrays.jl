@@ -317,7 +317,16 @@ function row_group_slots!(cols::NTuple{N, AbstractVector},
                       newcols, refpools, refarrays, hash, groups, skipmissing, sort, compress)
     end
 
-    strides = (cumprod(collect(reverse(ngroupstup)))[end-1:-1:1]..., 1)::NTuple{N, Int}
+    # strides[i] is the product of ngroupstup[i+1:N]. Computed with a loop rather than
+    # cumprod(collect(reverse(ngroupstup))), which compiles abstractly typed Base code
+    # that packages adding array methods (e.g. CategoricalArrays) invalidate
+    strides = ntuple(Val(N)) do i
+        stride = 1
+        for j in (i + 1):N
+            stride *= ngroupstup[j]::Int
+        end
+        stride
+    end
     firstinds = map(firstindex, refpools)
     if sort
         nminds = map(refpools, missinginds) do refpool, missingind
